@@ -1,0 +1,21 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  supportctl:
+    # The supportctl check is pure Python/static validation and runs on
+    # GitHub-hosted capacity.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate support operator tooling
+        run: |
+          python3 -m py_compile supportctl/*.py tests/*.py
+          python3 -m unittest discover -s tests -v

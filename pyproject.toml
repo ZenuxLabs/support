@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zenux-support"
+version = "0.1.0"
+description = "Zenux IT support and helpdesk operator tooling."
+requires-python = ">=3.11"
+readme = "README.md"
+license = "AGPL-3.0-or-later"
+
+[project.scripts]
+supportctl = "supportctl.cli:main"
+
+[tool.setuptools]
+packages = ["supportctl"]

@@ -1,0 +1,12 @@
+Zenux Support (supportctl + support-domain charter, contracts, and runbooks)
+
+Copyright (c) 2026 Scheduler Systems Ltd
+
+This product is licensed under the GNU Affero General Public License v3.0
+(AGPL-3.0). See the LICENSE file for the full license text.
+
+This repository contains the open support-domain operator tooling and
+documentation only. The live script-delivery plane (the hash-verifying Worker,
+signed customer-runnable scripts, provider key/tunnel plumbing, tenant
+configuration, and deploy credentials) is operated separately and is not part
+of this repository.
