@@ -12,7 +12,10 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORKER_DIR="$REPO_ROOT/worker"
 ENVIRONMENT="staging"
 DRY_RUN="false"
-REMOTE_SUPPORT_GCP_PROJECT_DEFAULT="stratus-scheduler-systems"
+# Instance-specific. Set REMOTE_SUPPORT_GCP_PROJECT (or GOOGLE_CLOUD_PROJECT /
+# gcloud config) to the GCP project holding your Cloudflare secrets. Operating
+# instances set this from their private config; left blank in the OSS engine.
+REMOTE_SUPPORT_GCP_PROJECT_DEFAULT="${REMOTE_SUPPORT_GCP_PROJECT_DEFAULT:-}"
 
 usage() {
   cat <<'EOF'
@@ -138,7 +141,7 @@ if [[ "$DRY_RUN" != "true" ]]; then
     CLOUDFLARE_ACCOUNT_ID_SECRET="${CLOUDFLARE_ACCOUNT_ID_SECRET:-REMOTE_SUPPORT_CLOUDFLARE_ACCOUNT_ID}"
     if ! CLOUDFLARE_ACCOUNT_ID="$(read_gcp_secret "$CLOUDFLARE_ACCOUNT_ID_SECRET")"; then
       echo "Refusing deploy without CLOUDFLARE_ACCOUNT_ID or GCP secret $CLOUDFLARE_ACCOUNT_ID_SECRET." >&2
-      echo "Run: gcloud auth login && gcloud config set project $REMOTE_SUPPORT_GCP_PROJECT_DEFAULT" >&2
+      echo "Set REMOTE_SUPPORT_GCP_PROJECT (or the *_SECRET/CLOUDFLARE_* env vars) and: gcloud auth login" >&2
       exit 2
     fi
     export CLOUDFLARE_ACCOUNT_ID
@@ -148,7 +151,7 @@ if [[ "$DRY_RUN" != "true" ]]; then
     CLOUDFLARE_API_TOKEN_SECRET="${CLOUDFLARE_API_TOKEN_SECRET:-$DEFAULT_CLOUDFLARE_TOKEN_SECRET}"
     if ! CLOUDFLARE_API_TOKEN="$(read_gcp_secret "$CLOUDFLARE_API_TOKEN_SECRET")"; then
       echo "Refusing deploy without CLOUDFLARE_API_TOKEN or GCP secret $CLOUDFLARE_API_TOKEN_SECRET." >&2
-      echo "Run: gcloud auth login && gcloud config set project $REMOTE_SUPPORT_GCP_PROJECT_DEFAULT" >&2
+      echo "Set REMOTE_SUPPORT_GCP_PROJECT (or the *_SECRET/CLOUDFLARE_* env vars) and: gcloud auth login" >&2
       echo "Dry-run locally with: ./worker/deploy.sh --dry-run" >&2
       exit 2
     fi
