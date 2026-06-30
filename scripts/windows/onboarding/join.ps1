@@ -1,0 +1,97 @@
+<#
+.SYNOPSIS
+  One-command fleet onboarding entry point for a new Windows machine.
+
+.DESCRIPTION
+  This is the short front door for Windows fleet onboarding. Windows cannot use
+  Tailscale's built-in SSH server, so onboarding means: join the tailnet, then
+  run regular Windows OpenSSH Server reached over the Tailscale transport. This
+  wrapper collects the one unavoidable input (the tagged Tailscale auth key),
+  bakes in everything else (support SSH key, hostname, durable account), and
+  hands off to the hash-verified runner.
+
+  Run from an ELEVATED PowerShell on the new machine:
+
+      irm https://support.gal.run/join.ps1 | iex
+
+  Non-interactive (CI / unattended): preset the env vars and pipe as above.
+      $env:TAILSCALE_AUTH_KEY = 'tskey-auth-...'
+      $env:ZENUX_SUPPORT_HOSTNAME = 'windows-2'   # optional; defaults to COMPUTERNAME
+
+  The auth key must be a TAGGED key (tag:worker, tag:shared) — tags are applied
+  from the key, matching the rest of the fleet. This wrapper itself carries NO
+  secret; the actual onboard script is SHA256-verified through /manifest.json.
+#>
+
+$ErrorActionPreference = "Stop"
+
+# --- Must be elevated -----------------------------------------------------
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = [Security.Principal.WindowsPrincipal]$identity
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Host "This must run in an ELEVATED PowerShell (Run as Administrator)." -ForegroundColor Yellow
+    Write-Host "Open PowerShell as Administrator, then re-run:" -ForegroundColor Yellow
+    Write-Host "  irm https://support.gal.run/join.ps1 | iex" -ForegroundColor Yellow
+    return
+}
+
+$baseUrl = if ($env:ZENUX_SUPPORT_BASE_URL) { $env:ZENUX_SUPPORT_BASE_URL } else { "https://support.gal.run" }
+
+# --- 1. Tagged Tailscale auth key (the one unavoidable input) -------------
+$authKey = $env:TAILSCALE_AUTH_KEY
+if (-not $authKey) {
+    $secure = Read-Host "Paste the tagged Tailscale auth key (tskey-...)" -AsSecureString
+    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+    try {
+        $authKey = [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+    } finally {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+    }
+}
+$authKey = $authKey.Trim()
+if ($authKey -notmatch '^tskey-') {
+    throw "That does not look like a Tailscale auth key (expected to start with 'tskey-')."
+}
+
+# --- 2. Hostname (default = this machine's name) --------------------------
+$hostName = if ($env:ZENUX_SUPPORT_HOSTNAME) { $env:ZENUX_SUPPORT_HOSTNAME } else { $env:COMPUTERNAME.ToLower() }
+
+# --- 3. SSH authorized key -------------------------------------------------
+# Resolution order: caller env -> key baked in at deploy time by the operating
+# instance (worker build fills {{SUPPORT_AUTHORIZED_KEY}}) -> prompt. The OSS
+# build leaves it empty so self-hosters authorize THEIR own key, not anyone
+# else's. A public SSH key is not a secret.
+$bakedKey = '{{SUPPORT_AUTHORIZED_KEY}}'
+$authorizedKey =
+    if ($env:ZENUX_SUPPORT_SSH_AUTHORIZED_KEY) { $env:ZENUX_SUPPORT_SSH_AUTHORIZED_KEY }
+    elseif ($bakedKey -and $bakedKey -notlike '*{{*') { $bakedKey }
+    else { Read-Host "Paste the SSH public key to authorize for support access (ssh-ed25519 ...)" }
+if ($authorizedKey.Trim() -notmatch '^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521))\s+') {
+    throw "That does not look like an OpenSSH public key."
+}
+
+$env:TAILSCALE_AUTH_KEY = $authKey
+$env:ZENUX_SUPPORT_HOSTNAME = $hostName
+$env:ZENUX_SUPPORT_SSH_AUTHORIZED_KEY = $authorizedKey
+$env:ZENUX_SUPPORT_SSH_USER = "zenux-support"
+
+Write-Host ""
+Write-Host "[*] Onboarding '$hostName' to the tailnet (Tailscale + key-only Windows OpenSSH)..." -ForegroundColor Cyan
+
+# --- 4. Fetch the hash-verifying runner; run the verified bootstrap -------
+# Durable fleet account (~10y) rather than the 24h support-session default.
+$runner = Join-Path $env:TEMP "zenux-run-verified.ps1"
+Invoke-WebRequest -Uri "$baseUrl/run-verified.ps1" -OutFile $runner
+try {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner `
+        -ManifestUrl "$baseUrl/manifest.json" `
+        -Script "customer-ssh-bootstrap.ps1" `
+        -ScriptArgs "-ExpiresHours", "87600"
+} finally {
+    Remove-Item $runner -Force -ErrorAction SilentlyContinue
+}
+
+Write-Host ""
+Write-Host "Done. From the controller (mac-pro-1):" -ForegroundColor Green
+Write-Host "  tailscale ping $hostName"
+Write-Host "  ssh $hostName"
