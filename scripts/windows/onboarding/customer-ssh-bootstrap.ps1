@@ -41,7 +41,7 @@ param(
     [string]$Hostname = $(if ($env:ZENUX_SUPPORT_HOSTNAME) { $env:ZENUX_SUPPORT_HOSTNAME } elseif ($env:TAILSCALE_HOSTNAME) { $env:TAILSCALE_HOSTNAME } else { $env:COMPUTERNAME }),
     [string]$SupportUser = $(if ($env:ZENUX_SUPPORT_SSH_USER) { $env:ZENUX_SUPPORT_SSH_USER } else { "zenux-support" }),
     [string]$TicketId = $env:ZENUX_SUPPORT_TICKET_ID,
-    [int]$ExpiresHours = 24
+    [int]$ExpiresHours = $(if ($env:ZENUX_SUPPORT_EXPIRES_HOURS) { [int]$env:ZENUX_SUPPORT_EXPIRES_HOURS } else { 24 })
 )
 
 $ErrorActionPreference = "Stop"
