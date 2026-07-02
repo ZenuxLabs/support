@@ -37,7 +37,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Script,
 
-    [string]$ManifestUrl = $(if ($env:ZENUX_SUPPORT_MANIFEST_URL) { $env:ZENUX_SUPPORT_MANIFEST_URL } elseif ($env:ZENUX_SUPPORT_BASE_URL) { $env:ZENUX_SUPPORT_BASE_URL.TrimEnd('/') + "/manifest.json" } elseif ('{{SUPPORT_BASE_URL}}' -and '{{SUPPORT_BASE_URL}}' -notlike '*{{*') { '{{SUPPORT_BASE_URL}}'.TrimEnd('/') + "/manifest.json" } else { "" }),
+    [string]$ManifestUrl = $(if ($env:ZENUX_SUPPORT_MANIFEST_URL) { $env:ZENUX_SUPPORT_MANIFEST_URL } elseif ($env:ZENUX_SUPPORT_BASE_URL) { $env:ZENUX_SUPPORT_BASE_URL.TrimEnd('/') + "/manifest.json" } elseif ('{{SUPPORT_BASE_URL}}' -and '{{SUPPORT_BASE_URL}}' -notlike '*{{*') { '{{SUPPORT_BASE_URL}}'.TrimEnd('/') + "/manifest.json" } else { throw "No manifest URL. Set ZENUX_SUPPORT_MANIFEST_URL or ZENUX_SUPPORT_BASE_URL (or build with SUPPORT_BASE_URL)." }),
 
     [string]$Destination = $(Join-Path $env:TEMP "zenux-support"),
 

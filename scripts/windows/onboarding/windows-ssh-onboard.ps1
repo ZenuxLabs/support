@@ -207,6 +207,23 @@ function Set-AuthorizedKey {
         throw "Set-AuthorizedKey received an empty public key for '$Name'."
     }
 
+    # Windows OpenSSH ignores a user's ~/.ssh/authorized_keys when that user is an
+    # Administrator — it reads %ProgramData%\ssh\administrators_authorized_keys
+    # instead. Writing (and verifying) the per-user file would then still be a
+    # silent SSH lockout, so require a NON-admin support user and fail loudly.
+    # (SID S-1-5-32-544 = built-in Administrators, locale-independent.)
+    $inAdmins = $false
+    try {
+        $inAdmins = @(Get-LocalGroupMember -SID "S-1-5-32-544" -ErrorAction Stop |
+            Where-Object { $_.Name -eq $account -or $_.Name -like "*\$Name" }).Count -gt 0
+    } catch {
+        # Get-LocalGroupMember can choke on orphaned SIDs; best-effort fallback.
+        $inAdmins = [bool](@(& net localgroup Administrators 2>$null) -match "(^|\\)$([regex]::Escape($Name))\s*$")
+    }
+    if ($inAdmins) {
+        throw "Support user '$Name' is in Administrators; Windows OpenSSH would ignore its per-user authorized_keys (it uses %ProgramData%\ssh\administrators_authorized_keys). This fabric expects a NON-admin support user — remove it from Administrators and re-run."
+    }
+
     # Authoritative write. The support account is single-purpose (one key), so we
     # overwrite rather than a conditional Add-Content: an earlier run that left an
     # empty or partial authorized_keys must not survive (this was the windows-2

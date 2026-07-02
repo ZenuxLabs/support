@@ -30,6 +30,14 @@ INSTANCE_SUBSTITUTIONS = {
     "{{SUPPORT_BASE_URL}}": BASE_URL,
 }
 
+if not BASE_URL:
+    print(
+        "WARNING: SUPPORT_BASE_URL is empty — the built worker will not know its "
+        "own host (manifest baseUrl and baked script URLs will be blank). Set "
+        "SUPPORT_BASE_URL for a real deploy.",
+        file=sys.stderr,
+    )
+
 
 def js_template_literal(content):
     escaped = content.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")

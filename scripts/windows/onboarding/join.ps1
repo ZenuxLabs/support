@@ -105,6 +105,11 @@ try {
 } finally {
     Remove-Item $runner -Force -ErrorAction SilentlyContinue
 }
+# The runner is a child powershell.exe; its failure does NOT throw here. Check the
+# exit code so a failed onboard is not reported as success (windows-2 lesson).
+if ($LASTEXITCODE -ne 0) {
+    throw "Onboarding failed (run-verified.ps1 exit $LASTEXITCODE); '$hostName' is NOT fully onboarded."
+}
 
 Write-Host ""
 Write-Host "Done. From the controller (mac-pro-1):" -ForegroundColor Green
