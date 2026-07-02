@@ -3,7 +3,10 @@
 #
 # Default target is staging. Production deploys require both:
 #   ./worker/deploy.sh --production
-#   CONFIRM_PRODUCTION_DEPLOY=support.gal.run
+#   CONFIRM_PRODUCTION_DEPLOY=<your production domain>   # = $SUPPORT_DOMAIN
+#
+# The serving domain is instance config (SUPPORT_DOMAIN / SUPPORT_STAGING_DOMAIN);
+# the OSS engine hardcodes none.
 #
 # Prerequisites: gcloud Secret Manager access or CLOUDFLARE_API_TOKEN.
 set -euo pipefail
@@ -32,12 +35,14 @@ Environment:
   CLOUDFLARE_ACCOUNT_ID           Optional override; otherwise read from Secret Manager.
   CLOUDFLARE_ACCOUNT_ID_SECRET    Optional Secret Manager name override.
   SUPPORT_ARTIFACT_VERSION        Defaults to current git short SHA.
-  SUPPORT_BASE_URL                Defaults from selected environment.
-  CONFIRM_PRODUCTION_DEPLOY       Must equal support.gal.run for --production.
+  SUPPORT_BASE_URL                Defaults to https://$SUPPORT_DOMAIN.
+  SUPPORT_DOMAIN                  Production serving host (instance config).
+  SUPPORT_STAGING_DOMAIN          Staging serving host (instance config).
+  CONFIRM_PRODUCTION_DEPLOY       Must equal $SUPPORT_DOMAIN for --production.
 
-Custom domains:
-  staging     support-staging.gal.run
-  production  support.gal.run
+Custom domains (required instance config; the engine hardcodes none):
+  staging     SUPPORT_STAGING_DOMAIN
+  production  SUPPORT_DOMAIN
 
 Default GCP secrets:
   REMOTE_SUPPORT_STAGING_CLOUDFLARE_API_TOKEN
@@ -106,18 +111,29 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# The serving host is instance config, not hardcoded: an operating instance
+# (e.g. ZenuxLabs/support-cloud) passes SUPPORT_DOMAIN. The confirm token tracks
+# the resolved domain so a production deploy always names the host it targets.
 if [[ "$ENVIRONMENT" == "production" ]]; then
-  WORKER_NAME="support-scripts"
-  DOMAIN="support.gal.run"
-  DEFAULT_BASE_URL="https://support.gal.run"
-  if [[ "${CONFIRM_PRODUCTION_DEPLOY:-}" != "support.gal.run" ]]; then
-    echo "Refusing production deploy without CONFIRM_PRODUCTION_DEPLOY=support.gal.run" >&2
+  WORKER_NAME="${SUPPORT_WORKER_NAME:-support-scripts}"
+  DOMAIN="${SUPPORT_DOMAIN:-}"
+  if [[ -z "$DOMAIN" ]]; then
+    echo "Set SUPPORT_DOMAIN to your production serving host (e.g. support.example.com)." >&2
+    exit 2
+  fi
+  DEFAULT_BASE_URL="https://$DOMAIN"
+  if [[ "${CONFIRM_PRODUCTION_DEPLOY:-}" != "$DOMAIN" ]]; then
+    echo "Refusing production deploy without CONFIRM_PRODUCTION_DEPLOY=$DOMAIN" >&2
     exit 2
   fi
 else
-  WORKER_NAME="support-scripts-staging"
-  DOMAIN="support-staging.gal.run"
-  DEFAULT_BASE_URL="https://support-staging.gal.run"
+  WORKER_NAME="${SUPPORT_WORKER_NAME:-support-scripts-staging}"
+  DOMAIN="${SUPPORT_STAGING_DOMAIN:-}"
+  if [[ -z "$DOMAIN" ]]; then
+    echo "Set SUPPORT_STAGING_DOMAIN to your staging serving host (e.g. support-staging.example.com)." >&2
+    exit 2
+  fi
+  DEFAULT_BASE_URL="https://$DOMAIN"
 fi
 
 if [[ "$ENVIRONMENT" == "production" ]]; then

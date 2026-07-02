@@ -118,8 +118,18 @@ function Invoke-WindowsSshOnboarding {
         [string]$Ticket
     )
 
+    # Resolve the serving base URL (env from join.ps1, else the value baked in at
+    # build time by the operating instance). No hardcoded domain — a self-hosted
+    # instance serves its OWN host. (Closes ZenuxLabs/support#3.)
+    $bakedBaseUrl = '{{SUPPORT_BASE_URL}}'
+    $baseUrl =
+        if ($env:ZENUX_SUPPORT_BASE_URL) { $env:ZENUX_SUPPORT_BASE_URL }
+        elseif ($bakedBaseUrl -and $bakedBaseUrl -notlike '*{{*') { $bakedBaseUrl }
+        else { throw "No support base URL. Set ZENUX_SUPPORT_BASE_URL (or build with SUPPORT_BASE_URL)." }
+    $baseUrl = $baseUrl.TrimEnd('/')
+
     $scriptPath = Join-Path $env:TEMP "windows-ssh-onboard.ps1"
-    Invoke-WebRequest -Uri "https://support.gal.run/windows-ssh-onboard.ps1" -OutFile $scriptPath
+    Invoke-WebRequest -Uri "$baseUrl/windows-ssh-onboard.ps1" -OutFile $scriptPath
 
     # Pass values via ENV (inherited by the child), NOT as `powershell -File`
     # arguments: a value containing spaces (the SSH public key!) is split across
@@ -133,6 +143,12 @@ function Invoke-WindowsSshOnboarding {
     }
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath
+    # A child powershell.exe failure does NOT throw in the parent; its exit code
+    # must be checked explicitly, or a failed onboard is silently reported as
+    # success (this masked the windows-2 empty-key failure).
+    if ($LASTEXITCODE -ne 0) {
+        throw "windows-ssh-onboard.ps1 failed (exit $LASTEXITCODE); SSH access was NOT configured."
+    }
 }
 
 Assert-Administrator

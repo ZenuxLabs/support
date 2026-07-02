@@ -12,7 +12,7 @@
 
   Run from an ELEVATED PowerShell on the new machine:
 
-      irm https://support.gal.run/join.ps1 | iex
+      irm {{SUPPORT_BASE_URL}}/join.ps1 | iex
 
   Non-interactive (CI / unattended): preset the env vars and pipe as above.
       $env:TAILSCALE_AUTH_KEY = 'tskey-auth-...'
@@ -25,17 +25,26 @@
 
 $ErrorActionPreference = "Stop"
 
+# --- Serving base URL -----------------------------------------------------
+# Resolution: caller env -> value baked in at build time by the operating
+# instance ({{SUPPORT_BASE_URL}}) -> fail. The OSS engine bakes no domain; a
+# deployed instance serves its own host (this is fetched from that host).
+$bakedBaseUrl = '{{SUPPORT_BASE_URL}}'
+$baseUrl =
+    if ($env:ZENUX_SUPPORT_BASE_URL) { $env:ZENUX_SUPPORT_BASE_URL }
+    elseif ($bakedBaseUrl -and $bakedBaseUrl -notlike '*{{*') { $bakedBaseUrl }
+    else { throw "No support base URL baked in. Re-fetch join.ps1 from your support host, or set ZENUX_SUPPORT_BASE_URL." }
+$baseUrl = $baseUrl.TrimEnd('/')
+
 # --- Must be elevated -----------------------------------------------------
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]$identity
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Host "This must run in an ELEVATED PowerShell (Run as Administrator)." -ForegroundColor Yellow
     Write-Host "Open PowerShell as Administrator, then re-run:" -ForegroundColor Yellow
-    Write-Host "  irm https://support.gal.run/join.ps1 | iex" -ForegroundColor Yellow
+    Write-Host "  irm $baseUrl/join.ps1 | iex" -ForegroundColor Yellow
     return
 }
-
-$baseUrl = if ($env:ZENUX_SUPPORT_BASE_URL) { $env:ZENUX_SUPPORT_BASE_URL } else { "https://support.gal.run" }
 
 # --- 1. Tagged Tailscale auth key (the one unavoidable input) -------------
 $authKey = $env:TAILSCALE_AUTH_KEY
@@ -74,6 +83,9 @@ $env:TAILSCALE_AUTH_KEY = $authKey
 $env:ZENUX_SUPPORT_HOSTNAME = $hostName
 $env:ZENUX_SUPPORT_SSH_AUTHORIZED_KEY = $authorizedKey
 $env:ZENUX_SUPPORT_SSH_USER = "zenux-support"
+# Inherited by the verified child scripts so their secondary downloads resolve
+# to this same host (no hardcoded domain).
+$env:ZENUX_SUPPORT_BASE_URL = $baseUrl
 # Durable fleet account (~10y) rather than the 24h support-session default.
 # Passed via env (inherited by the child scripts), NOT -ScriptArgs: an array
 # does not survive the `powershell -File` boundary in run-verified.ps1, so
@@ -92,6 +104,11 @@ try {
         -Script "customer-ssh-bootstrap.ps1"
 } finally {
     Remove-Item $runner -Force -ErrorAction SilentlyContinue
+}
+# The runner is a child powershell.exe; its failure does NOT throw here. Check the
+# exit code so a failed onboard is not reported as success (windows-2 lesson).
+if ($LASTEXITCODE -ne 0) {
+    throw "Onboarding failed (run-verified.ps1 exit $LASTEXITCODE); '$hostName' is NOT fully onboarded."
 }
 
 Write-Host ""

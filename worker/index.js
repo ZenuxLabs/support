@@ -1,4 +1,4 @@
-// Cloudflare Worker — serves support scripts at support.gal.run
+// Cloudflare Worker — serves support scripts at the operating instance's host
 // Scripts are embedded at deploy time via wrangler (no KV needed).
 // The scripts themselves contain NO secrets — auth keys are always passed at runtime.
 
