@@ -74,19 +74,22 @@ $env:TAILSCALE_AUTH_KEY = $authKey
 $env:ZENUX_SUPPORT_HOSTNAME = $hostName
 $env:ZENUX_SUPPORT_SSH_AUTHORIZED_KEY = $authorizedKey
 $env:ZENUX_SUPPORT_SSH_USER = "zenux-support"
+# Durable fleet account (~10y) rather than the 24h support-session default.
+# Passed via env (inherited by the child scripts), NOT -ScriptArgs: an array
+# does not survive the `powershell -File` boundary in run-verified.ps1, so
+# `-ExpiresHours 87600` arrived as a bare `-ExpiresHours` with no value.
+$env:ZENUX_SUPPORT_EXPIRES_HOURS = "87600"
 
 Write-Host ""
 Write-Host "[*] Onboarding '$hostName' to the tailnet (Tailscale + key-only Windows OpenSSH)..." -ForegroundColor Cyan
 
 # --- 4. Fetch the hash-verifying runner; run the verified bootstrap -------
-# Durable fleet account (~10y) rather than the 24h support-session default.
 $runner = Join-Path $env:TEMP "zenux-run-verified.ps1"
 Invoke-WebRequest -Uri "$baseUrl/run-verified.ps1" -OutFile $runner
 try {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner `
         -ManifestUrl "$baseUrl/manifest.json" `
-        -Script "customer-ssh-bootstrap.ps1" `
-        -ScriptArgs "-ExpiresHours", "87600"
+        -Script "customer-ssh-bootstrap.ps1"
 } finally {
     Remove-Item $runner -Force -ErrorAction SilentlyContinue
 }
