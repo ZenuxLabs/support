@@ -15,7 +15,9 @@
   Script name from manifest.json, for example crash-check.ps1.
 
 .PARAMETER ManifestUrl
-  Manifest URL. Defaults to https://support.gal.run/manifest.json.
+  Manifest URL. Defaults to the operating instance's /manifest.json — resolved
+  from ZENUX_SUPPORT_MANIFEST_URL, ZENUX_SUPPORT_BASE_URL, or the base URL baked
+  in at build time. The OSS engine hardcodes no domain.
 
 .PARAMETER Destination
   Local directory used for downloaded scripts.
@@ -35,7 +37,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Script,
 
-    [string]$ManifestUrl = $(if ($env:ZENUX_SUPPORT_MANIFEST_URL) { $env:ZENUX_SUPPORT_MANIFEST_URL } else { "https://support.gal.run/manifest.json" }),
+    [string]$ManifestUrl = $(if ($env:ZENUX_SUPPORT_MANIFEST_URL) { $env:ZENUX_SUPPORT_MANIFEST_URL } elseif ($env:ZENUX_SUPPORT_BASE_URL) { $env:ZENUX_SUPPORT_BASE_URL.TrimEnd('/') + "/manifest.json" } elseif ('{{SUPPORT_BASE_URL}}' -and '{{SUPPORT_BASE_URL}}' -notlike '*{{*') { '{{SUPPORT_BASE_URL}}'.TrimEnd('/') + "/manifest.json" } else { "" }),
 
     [string]$Destination = $(Join-Path $env:TEMP "zenux-support"),
 

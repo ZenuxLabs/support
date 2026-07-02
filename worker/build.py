@@ -12,15 +12,22 @@ import tempfile
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORKER_DIR = os.path.join(REPO_ROOT, "worker")
 ARTIFACT_VERSION = os.environ.get("SUPPORT_ARTIFACT_VERSION", "dev")
-BASE_URL = os.environ.get("SUPPORT_BASE_URL", "https://support.gal.run")
+# The instance's serving domain. Deployed instances (worker/deploy.sh, or the
+# private ZenuxLabs/support-cloud config) set SUPPORT_BASE_URL to their own host;
+# the OSS engine hardcodes no domain. A raw build with no value leaves the
+# {{SUPPORT_BASE_URL}} placeholder empty, and the scripts fail loudly rather than
+# silently pulling from someone else's host.
+BASE_URL = os.environ.get("SUPPORT_BASE_URL", "")
 
 # Operating-instance config injected into served scripts at build time. The OSS
-# default is empty, so a self-hosted build leaves join.ps1's key prompt intact;
-# a private instance (e.g. ZenuxLabs/support-cloud) sets SUPPORT_AUTHORIZED_KEY
-# to bake in its own support pubkey. A public SSH key is not a secret.
+# defaults are empty, so a self-hosted build leaves join.ps1's key prompt intact
+# and bakes in no domain; a private instance (e.g. ZenuxLabs/support-cloud) sets
+# SUPPORT_AUTHORIZED_KEY / SUPPORT_BASE_URL to bake in its own support pubkey and
+# serving host. A public SSH key is not a secret.
 SUPPORT_AUTHORIZED_KEY = os.environ.get("SUPPORT_AUTHORIZED_KEY", "")
 INSTANCE_SUBSTITUTIONS = {
     "{{SUPPORT_AUTHORIZED_KEY}}": SUPPORT_AUTHORIZED_KEY,
+    "{{SUPPORT_BASE_URL}}": BASE_URL,
 }
 
 

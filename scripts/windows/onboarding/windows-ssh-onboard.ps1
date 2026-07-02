@@ -201,22 +201,28 @@ function Set-AuthorizedKey {
     $account = "$env:COMPUTERNAME\$Name"
 
     New-Item -ItemType Directory -Path $sshDir -Force | Out-Null
-    if (-not (Test-Path $authorizedKeys)) {
-        New-Item -ItemType File -Path $authorizedKeys -Force | Out-Null
-    }
 
     $trimmedKey = $PublicKey.Trim()
-    $existing = ""
-    if (Test-Path $authorizedKeys) {
-        $existing = Get-Content -Path $authorizedKeys -Raw -ErrorAction SilentlyContinue
+    if (-not $trimmedKey) {
+        throw "Set-AuthorizedKey received an empty public key for '$Name'."
     }
-    if ($existing -notmatch [regex]::Escape($trimmedKey)) {
-        Add-Content -Path $authorizedKeys -Value $trimmedKey -Encoding ascii
-    }
+
+    # Authoritative write. The support account is single-purpose (one key), so we
+    # overwrite rather than a conditional Add-Content: an earlier run that left an
+    # empty or partial authorized_keys must not survive (this was the windows-2
+    # failure mode — a blank authorized_keys that silently rejected every login).
+    Set-Content -Path $authorizedKeys -Value $trimmedKey -Encoding ascii
 
     icacls.exe $profileDir /inheritance:r /grant "SYSTEM:(OI)(CI)F" /grant "Administrators:(OI)(CI)F" /grant "${account}:(OI)(CI)F" | Out-Null
     icacls.exe $sshDir /inheritance:r /grant "SYSTEM:(OI)(CI)F" /grant "Administrators:(OI)(CI)F" /grant "${account}:(OI)(CI)F" | Out-Null
     icacls.exe $authorizedKeys /inheritance:r /grant "SYSTEM:F" /grant "Administrators:F" /grant "${account}:R" | Out-Null
+
+    # Verify the key actually landed. A blank authorized_keys is a silent SSH
+    # failure, so fail loudly here instead of reporting success downstream.
+    $written = Get-Content -Path $authorizedKeys -Raw -ErrorAction SilentlyContinue
+    if (-not $written -or ($written -notmatch [regex]::Escape($trimmedKey))) {
+        throw "authorized_keys for '$Name' is empty or missing the key after write: $authorizedKeys"
+    }
 
     Write-Host "[*] Installed public key for '$Name'." -ForegroundColor Cyan
 }
