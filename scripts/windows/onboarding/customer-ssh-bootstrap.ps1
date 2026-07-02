@@ -121,20 +121,18 @@ function Invoke-WindowsSshOnboarding {
     $scriptPath = Join-Path $env:TEMP "windows-ssh-onboard.ps1"
     Invoke-WebRequest -Uri "https://support.gal.run/windows-ssh-onboard.ps1" -OutFile $scriptPath
 
-    $args = @(
-        "-NoProfile",
-        "-ExecutionPolicy", "Bypass",
-        "-File", $scriptPath,
-        "-AuthorizedKey", $PublicKey,
-        "-SupportUser", $User,
-        "-ExpiresHours", $Hours
-    )
-
+    # Pass values via ENV (inherited by the child), NOT as `powershell -File`
+    # arguments: a value containing spaces (the SSH public key!) is split across
+    # the -File boundary, so -AuthorizedKey arrived empty and authorized_keys was
+    # written blank. windows-ssh-onboard.ps1 reads all of these from env.
+    $env:ZENUX_SUPPORT_SSH_AUTHORIZED_KEY = $PublicKey
+    $env:ZENUX_SUPPORT_SSH_USER = $User
+    $env:ZENUX_SUPPORT_EXPIRES_HOURS = "$Hours"
     if ($Ticket) {
-        $args += @("-TicketId", $Ticket)
+        $env:ZENUX_SUPPORT_TICKET_ID = $Ticket
     }
 
-    & powershell.exe @args
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath
 }
 
 Assert-Administrator
